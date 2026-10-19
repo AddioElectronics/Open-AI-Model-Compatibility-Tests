@@ -1,0 +1,91 @@
+{
+    "configurations": [
+        {
+            "name": "Python Debugger: Run All Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/run_tests.py",
+            "console": "integratedTerminal",
+            "args": "--log"
+        },
+        {
+            "name": "Python Debugger: Run Test Wizard",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/run_tests.py",
+            "console": "integratedTerminal",
+            "args": ["--log", "--wizard"]
+        },
+        {
+            "name": "Python Debugger: Test Help",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/run_tests.py",
+            "console": "integratedTerminal",
+            "args": "--help"
+        },
+        {
+            "name": "Python Debugger: Query All Models",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "Python Debugger: Query Wizard",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": "--wizard"
+        },
+        {
+            "name": "Python Debugger: Query Wizard: All Keys",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": "--all-keys"
+        },
+        {
+            "name": "Python Debugger: Query All: Summary View",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": ["--view", "summary"]
+        },
+        {
+            "name": "Python Debugger: Query Wizard: Summary View",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": ["--view summary", "--wizard"]
+        },
+        {
+            "name": "Python Debugger: Query All: Test View",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": "--view test"
+        },
+        {
+            "name": "Python Debugger: Query Wizard: Test View",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": ["--view test", "--wizard"]
+        },
+        {
+            "name": "Python Debugger: Query Help",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/results.py",
+            "console": "integratedTerminal",
+            "args": "--help"
+        },
+    ],    
+}

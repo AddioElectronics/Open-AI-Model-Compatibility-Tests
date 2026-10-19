@@ -1,0 +1,29 @@
+☐ Create proper modules for commands? Move duplicate code to shared files
+☐ Output path argument
+
+API Support:
+  ☐ Responses Api/Endpoint
+  ☐ Other AI Providers (That don't supply datasheets)
+
+Test Modules:
+  ☐ Pure JSON Tests
+  ☐ Use importlib to import python files/modules specified by arguments (Require "getTests" function (or similar))
+  ☐ Argument to specify specific test files to run (None grabs all from 'tests' folder)
+  ☐ Validate
+  Basic API (Single file):
+    ☐ Utilities
+    ☐ Test class?
+      e.g. structure
+      {
+        name: str,
+        build_payload: function | None,
+        add_to_result: function | None  (or similar)
+      }
+
+Querying:
+  ☐ An actual query system
+    e.g., Search for models that support tool calling with reasoning none
+  ☐ Include model start/end date in search
+  ☐ Price per 1M included in search results?
+  ☐ Copy filtered results to new file
+

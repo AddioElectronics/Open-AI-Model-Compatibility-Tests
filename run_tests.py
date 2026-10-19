@@ -1,0 +1,953 @@
+import csv
+import json
+import os
+import re
+import sys
+import time
+import argparse
+import atexit
+import fnmatch
+from datetime import datetime, timezone
+from openai import OpenAI
+
+from tests.tests import TESTS
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Test model compatibility"
+    )
+    
+    parser.add_argument(
+        "-a", "--apikey",
+        default=None,
+        help="Your Open AI API key, or leave blank to use api_key.txt",
+    )
+
+    parser.add_argument(
+        "-i", "--include",
+        metavar="MODEL",
+        nargs="+",      # Space-separated list -> returns a list
+        default=None,
+        help="Explicitly include model names. (Supports * Wilcard)",
+    )
+
+    parser.add_argument(
+        "-ex", "--exclude",
+        metavar="MODEL",
+        nargs="+",      # Space-separated list -> returns a list
+        default=None,
+        help="Explicitly exclude model names. (Supports * Wilcard)",
+    )
+    
+    parser.add_argument(
+        "-r", "--regex",
+        metavar="REGEX",
+        default=None,
+        help="Regex for selecting models.",
+    )
+
+    parser.add_argument(
+        "-rx", "--regexclude",
+        metavar="REGEX",
+        default=None,
+        help="Regex for excluding models.",
+    )
+
+    parser.add_argument(
+        "-t", "--tests",
+        metavar="TEST",
+        nargs="+",      # Space-separated list
+        default=set(),  # Default to empty set if omitted
+        type=str,       # Process items as raw strings first
+        help="Choose which tests to perform or omit for all.",
+    )
+    
+    parser.add_argument(
+        "-w", "--wizard",
+        action="store_true",
+        help="Interactively select models, tests, and keys.",
+    )
+
+    parser.add_argument(
+        "-f", "--force",
+        action="store_true",
+        help="Skip confirmation prompt.",
+    )
+    
+    parser.add_argument(
+        "-l", "--log",
+        action="store_true",
+        help="Log stdout to file.",
+    )
+
+    args = parser.parse_args()
+    
+    # Post-processing fix: convert the parsed list of tests into a clean set
+    if isinstance(args.tests, list):
+        args.tests = set(item.strip() for item in args.tests if item.strip())
+
+    return args
+
+def prompt_args(args, api_key, tests):
+    # Get API key if one wasn't provided.
+    while not api_key:
+        api_key = input(
+            "Enter OpenAI API key: "
+        ).strip() or None
+
+
+    # Initialize API client.
+    openClient(api_key)
+
+    # Retrieve available models.
+    available_models = pullAndFilterModels()
+
+    # Retrieve available test names.
+    available_tests = sorted(test["name"] for test in tests)
+
+    def prompt_selection(label, options, wildcard=False, default=None, showOptions=True):
+        
+        if showOptions:
+            print(f"\nAvailable {label}:")    
+            for option in options:
+                print(f"  - {option}")
+
+        wildcard_text = " (supports * wildcard)" if wildcard else ""
+
+        answer = input(
+            f"\nEnter {label}, separated by commas"
+            f"{wildcard_text} (Enter for all): "
+        ).strip()
+
+        if not answer:
+            return default
+
+        selected = {
+            item.strip()
+            for item in answer.split(",")
+            if item.strip()
+        }
+
+        if wildcard:
+            matched = {
+                option
+                for option in options
+                if any(
+                    fnmatch.fnmatchcase(option, pattern)
+                    for pattern in selected
+                )
+            }
+
+            invalid = {
+                pattern
+                for pattern in selected
+                if not any(
+                    fnmatch.fnmatchcase(option, pattern)
+                    for option in options
+                )
+            }
+        else:
+            matched = selected & set(options)
+            invalid = selected - set(options)
+
+        if invalid:
+            print(f"Unknown {label}: {', '.join(sorted(invalid))}")
+
+        return matched
+
+    # Select models to include.
+    selected_models = prompt_selection(
+        "models",
+        available_models,
+        wildcard=True,
+        default=None,
+        showOptions=True,
+    )
+    
+    exclude_models = prompt_selection(
+        "models to exclude",
+        available_models,
+        wildcard=True,
+        default=None,
+        showOptions=False,
+    )
+
+    # Default to all models if none were explicitly selected.
+    if selected_models is None:
+        selected_models = set(available_models)
+    else:
+        selected_models = set(selected_models)
+
+    # Remove excluded models.
+    selected_models -= exclude_models or set()
+
+    # Select tests to run.
+    selected_tests = prompt_selection(
+        "tests",
+        available_tests,
+        default=None,
+    )
+
+    # Store selections on args.
+    args.include = selected_models
+    args.exclude = exclude_models
+    args.tests = selected_tests
+
+    return args, api_key
+
+
+# =========================================================
+# Configuration
+# =========================================================
+RESULTS_BASE = "results/"
+RESULTS_CSV = f"{RESULTS_BASE}model_compatibility_results.csv"
+RESULTS_JSON = f"{RESULTS_BASE}model_compatibility_results.json"
+SUMMARY_CSV = f"{RESULTS_BASE}model_compatibility_summary.csv"
+
+REQUEST_DELAY_SECONDS = 0.25
+
+# Include dated snapshots as well as model aliases.
+INCLUDE_SNAPSHOTS = True
+
+# OpenAi client
+CLIENT = None
+PULLED_MODELS = None
+API_KEY_FILE = "api_key.txt"
+
+def tryReadApiKey():
+    if not os.path.exists(API_KEY_FILE): return None
+    try:        
+        with open(
+            API_KEY_FILE,
+            "r",
+            newline="",
+            encoding="utf-8",
+        ) as file:
+            return file.readline()
+    except:
+        return None
+    
+def openClient(api_key):
+    global CLIENT
+    if CLIENT:        return    
+    if not api_key:   raise KeyError("Api Key cannot be empty!")
+    CLIENT = OpenAI(api_key=api_key)
+    
+# =========================================================
+# Input
+# =========================================================
+
+def promptYesNo(message, force):
+    if force: return True
+    while True:
+        try:
+            accept = input(message + ' Y/N ').strip().lower()
+        except EOFError:
+            print("\nNo interactive input available. Use '--force' to disable prompts.")
+            exit(1)
+
+        if accept in ('y', 'yes'):
+            return True
+        elif accept in ('n', 'no'):
+            return False
+        else:
+            print("Please enter Y or N.")
+        
+# =========================================================
+# Logging
+# =========================================================
+
+LOG_FILE = None
+def close_log_file():
+    if LOG_FILE and not LOG_FILE.closed:
+        LOG_FILE.close()
+
+class DualStream:
+    def __init__(self, terminal_stream, file_stream):
+        self.terminal = terminal_stream
+        self.file = file_stream
+
+    def write(self, message):
+        self.terminal.write(message)  # Send to standard console
+        self.file.write(message)      # Send to log file
+        self.file.flush()             # Instantly save to disk
+
+    def flush(self):
+        self.terminal.flush()
+        self.file.flush()
+        
+def hijack_stdout():
+    global LOG_FILE
+    if LOG_FILE: return
+    LOG_FILE = open(
+        datetime.now().strftime(f"{RESULTS_BASE}log_%Y%m%d_%H%M%S.txt"),
+        'w',
+        newline="",
+        encoding="utf-8-sig"
+        )
+    atexit.register(close_log_file)
+    sys.stdout = DualStream(sys.stdout, LOG_FILE)
+    sys.stderr = DualStream(sys.stderr, LOG_FILE)
+
+# =========================================================
+# Model discovery
+# =========================================================
+
+# Default patterns are a first pass used to filter initial models retrieved via the API.
+# Command line arguments are the second pass used to precisely narrow down the model selection.
+
+# Include all gpt and o# models
+DEFAULT_INCLUDE_PATTERN = re.compile(r"^(gpt-|o\d)")
+
+# Exclude non text-text models
+DEFAULT_EXCLUDE_PATTERN = re.compile(
+    r"realtime|transcribe|translate|audio|tts|search|"
+    r"^gpt-image-|instruct"
+)
+
+# Canonical model names to test by default.
+# Dated snapshots are intentionally excluded.
+DEFAULT_MODELS = {
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-4-turbo",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-5",
+    "gpt-5-chat-latest",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-5-pro",
+    "gpt-5-codex",
+    "gpt-5.1",
+    "gpt-5.1-chat-latest",
+    "gpt-5.1-codex",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+    "gpt-5.2",
+    "gpt-5.2-chat-latest",
+    "gpt-5.2-codex",
+    "gpt-5.2-pro",
+    "gpt-5.3-chat-latest",
+    "gpt-5.3-codex",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.4-pro",
+    "gpt-5.5",
+    "gpt-5.5-pro",
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-6-astra",
+    "gpt-6-luna",
+    "gpt-6-sol",
+    "gpt-6.1-sol",
+    "o1",
+    "o1-pro",
+    "o3",
+    "o3-mini",
+    "o4-mini",
+}
+
+# Filters all non text-text models
+def pullAndFilterModels():
+    global CLIENT, PULLED_MODELS
+    
+    if not PULLED_MODELS:
+        response = CLIENT.models.list()
+        api_models = sorted([
+            model.id for model in response.data
+            if DEFAULT_INCLUDE_PATTERN.search(model.id) and not DEFAULT_EXCLUDE_PATTERN.search(model.id)
+            ], key=str.lower)
+        PULLED_MODELS = api_models
+    return PULLED_MODELS
+
+def select_models(available_model_ids, args):
+    api_models = set(available_model_ids)
+    selected = set()
+
+    # Stage 1: Include API models matching the regex.
+    if args.regex:
+        include_regex = re.compile(args.regex, re.IGNORECASE)
+        selected.update(
+            model for model in api_models
+            if include_regex.search(model)
+        )
+
+    # Stage 2: Use defaults if no inclusion filters were provided.
+    if not args.regex and not args.include:
+        selected.update(DEFAULT_MODELS)
+
+    # Stage 3: Add explicitly included models.
+    if args.include:
+        valid_models = set(args.include) & api_models
+        invalid_models = set(args.include) - api_models
+
+        selected.update(valid_models)
+
+        if invalid_models:
+            print(
+                "Invalid model IDs: "
+                + ", ".join(sorted(invalid_models))
+            )
+
+    # Stage 4: Apply regex exclusions.
+    if args.regexclude:
+        exclude_regex = re.compile(args.regexclude, re.IGNORECASE)
+        selected = {
+            model for model in selected
+            if not exclude_regex.search(model)
+        }
+
+    # Stage 5: Apply explicit exclusions.
+    selected.difference_update(args.exclude or [])
+
+    # Stage 6: Return sorted, deduplicated model IDs.
+    return sorted(selected)
+
+
+# =========================================================
+# Tool definition
+# =========================================================
+
+# Fake tools. The script does not execute it.
+FAKE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "test_tool",
+            "description": (
+                "A test function used to verify tool-calling support. "
+                "Call this function with message set to OK."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The test message.",
+                    }
+                },
+                "required": ["message"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    }
+]
+
+
+# =========================================================
+# Payload construction
+# =========================================================
+
+def uses_max_completion_tokens(model_name):
+    """
+    Check if model used 'max_completion_tokens' over the deprecated 'max_tokens' in the API request.
+    """    
+    return (
+        model_name.startswith("o1-")
+        or model_name.startswith("o3-")
+        or model_name.startswith("o4-")
+        or model_name.startswith("gpt-5")
+        or model_name.startswith("gpt-6")
+    )
+
+
+def build_payload(model, test):
+    """
+    Constructs a minimal Chat Completions payload from a test object. 
+    """
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are participating in an API compatibility test. "
+                "Follow the user's instruction exactly."
+            ),
+        }
+    ]
+
+    if test["use_tools"]:
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Call the test_tool function with message set to OK. "
+                    "Do not provide a normal text response."
+                ),
+            }
+        )
+    else:
+        messages.append(
+            {
+                "role": "user",
+                "content": "Reply with OK.",
+            }
+        )
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+    }
+
+    if uses_max_completion_tokens(model):
+        payload["max_completion_tokens"] = test["max_tokens"]
+    else:
+        payload["max_tokens"] = test["max_tokens"]
+
+    if test["reasoning_effort"] is not None:
+        payload["reasoning_effort"] = test["reasoning_effort"]
+
+    if test["use_tools"]:
+        payload["tools"] = FAKE_TOOLS
+
+        # Here we use "required" to make the test deterministic:
+        # the model must call a tool if the request is accepted.
+        payload["tool_choice"] = "required"
+    
+    # Add standard keys
+    special_keys = ["name", "use_tools", "reasoning_effort", "max_tokens", "model", "stream"]
+    reserved_keys = ["model", "stream"]
+    for key, value in test:
+        if key in special_keys:
+            if key in reserved_keys:
+                print(f"Reserved test key will be skipped ({key}: {value})")
+            continue
+        payload[key] = value
+
+    return payload
+
+
+# =========================================================
+# API execution
+# =========================================================
+
+def run_test(model, test):
+    global CLIENT
+    payload = build_payload(model, test)
+
+    result = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "model": model,
+        "test": test["name"],
+        "reasoning_effort_requested": (
+            test["reasoning_effort"]
+            if test["reasoning_effort"] is not None
+            else "omitted"
+        ),
+        "tool_calling_requested": test["use_tools"],
+        "token_parameter": (
+            "max_completion_tokens"
+            if "max_completion_tokens" in payload
+            else "max_tokens"
+        ),
+        "max_tokens_requested": test["max_tokens"],
+        "request_payload": payload,
+        "request_status": "unknown",
+        "http_status": None,
+        "finish_reason": None,
+        "response_text": None,
+        "tool_calls_returned": False,
+        "tool_call_names": [],
+        "tool_call_arguments": [],
+        "usage": None,
+        "response_dump": None,
+        "latency_seconds": None,
+        "error_type": None,
+        "error_code": None,
+        "error_message": None,
+        "output_log": None
+    }
+
+    print(f"  {test['name']}: ", end="", flush=True)
+    
+    def write_log(message):
+        result["output_log"] = message
+        print(message)
+
+    started = time.perf_counter()
+
+    try:
+        # We construct the payload ourselves to keep the JSON
+        # fields explicit and reproducible.
+        response = CLIENT.chat.completions.create(**payload)
+
+        result["request_status"] = "success"
+        result["http_status"] = 200
+
+        choice = response.choices[0]
+        message = choice.message
+
+        result["finish_reason"] = choice.finish_reason
+        result["response_text"] = message.content
+
+        returned_calls = message.tool_calls or []
+
+        result["tool_calls_returned"] = bool(returned_calls)
+
+        result["tool_call_names"] = [
+            call.function.name for call in returned_calls
+        ]
+
+        result["tool_call_arguments"] = [
+            {
+                "name": call.function.name,
+                "arguments": call.function.arguments,
+            }
+            for call in returned_calls
+        ]
+
+        if response.usage is not None:
+            result["usage"] = response.usage.model_dump()
+
+        result["response_dump"] = response.model_dump()
+
+        if test["use_tools"]:
+            if returned_calls:
+                write_log("SUCCESS — tool call returned")
+            else:
+                write_log(
+                    "SUCCESS — no tool call returned "
+                    f"(finish_reason={choice.finish_reason})"
+                )
+        else:
+            write_log(
+                f"SUCCESS — response={message.content!r}"
+            )
+
+    except Exception as exc:
+        result["request_status"] = "error"
+        result["error_type"] = type(exc).__name__
+        result["error_message"] = str(exc)
+
+        result["http_status"] = getattr(exc, "status_code", None)
+        result["error_code"] = getattr(exc, "code", None)
+
+        body = getattr(exc, "body", None)
+        if body is not None:
+            result["error_body"] = body
+
+        write_log(
+            f"ERROR — {type(exc).__name__}: "
+            f"{str(exc)[:250]}"
+        )
+
+    finally:
+        result["latency_seconds"] = round(
+            time.perf_counter() - started, 3
+        )
+
+    return result
+
+
+# =========================================================
+# CSV and JSON output
+# =========================================================
+
+CSV_FIELDS = [
+    "timestamp_utc",
+    "model",
+    "test",
+    "reasoning_effort_requested",
+    "tool_calling_requested",
+    "token_parameter",
+    "max_tokens_requested",
+    "request_status",
+    "http_status",
+    "finish_reason",
+    "response_text",
+    "tool_calls_returned",
+    "tool_call_names",
+    "tool_call_arguments",
+    "usage",
+    "latency_seconds",
+    "error_type",
+    "error_code",
+    "error_message",
+]
+
+
+def csv_safe(value):
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+
+    if value is None:
+        return ""
+
+    return value
+
+
+def save_results(results):
+    # Detailed CSV: one row per model/test combination.
+    with open(
+        RESULTS_CSV,
+        "w",
+        newline="",
+        encoding="utf-8-sig",
+    ) as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=CSV_FIELDS,
+            extrasaction="ignore",
+        )
+
+        writer.writeheader()
+
+        for model, tests in results.items():
+            for test_name, obj in tests.items():
+                row = {
+                    field: csv_safe(obj.get(field))
+                    for field in CSV_FIELDS
+                }
+
+                # Ensure identifiers match the dictionary keys.
+                row["model"] = model
+                row["test"] = test_name
+
+                writer.writerow(row)
+
+    # JSON retains complete request payloads and response dumps.
+    with open(
+        RESULTS_JSON,
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            results,
+            file,
+            indent=2,
+            ensure_ascii=False,
+            default=str,
+        )
+
+    # Save the summary using the same nested structure.
+    save_summary(results)
+
+
+def save_summary(results):
+    by_model = {}
+
+    for model, tests in results.items():
+        row = {"model": model}
+
+        for test_name, result in tests.items():
+            if result["request_status"] != "success":
+                status = "ERROR"
+
+            elif test_name.startswith("tool_calls"):
+                status = (
+                    "TOOL_CALL"
+                    if result["tool_calls_returned"]
+                    else "NO_TOOL_CALL"
+                )
+
+            else:
+                status = "ACCEPTED"
+
+            row[test_name] = status
+
+            if result.get("error_message"):
+                row[f"{test_name}_error"] = result["error_message"]
+
+        by_model[model] = row
+
+    # Build columns from TESTS so new tests are included automatically.
+    fields = ["model"]
+
+    for test in TESTS:
+        test_name = test["name"]
+        fields.append(test_name)
+        fields.append(f"{test_name}_error")
+
+    with open(
+        SUMMARY_CSV,
+        "w",
+        newline="",
+        encoding="utf-8-sig",
+    ) as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fields,
+            extrasaction="ignore",
+        )
+
+        writer.writeheader()
+
+        for model in sorted(by_model, key=str.lower):
+            writer.writerow(by_model[model])
+
+
+def open_old_summary():
+    if not os.path.exists(SUMMARY_CSV):
+        return {}
+
+    results = {}
+
+    with open(
+        SUMMARY_CSV,
+        "r",
+        newline="",
+        encoding="utf-8-sig",
+    ) as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            model = row["model"]
+
+            results[model] = {
+                key: value
+                for key, value in row.items()
+                if key != "model"
+                and value not in (None, "")
+                and not key.endswith("_error")
+            }
+
+    return results
+
+def open_old_results():
+    if not os.path.exists(RESULTS_JSON):
+        return {}
+
+    with open(
+        RESULTS_JSON,
+        "r",
+        newline="",
+        encoding="utf-8-sig",
+    ) as file:
+        return json.load(file)
+
+
+# =========================================================
+# Main
+# =========================================================
+
+def main():
+    global CLIENT
+    args = parse_args()
+    
+    if args.log:
+        hijack_stdout()
+    
+    api_key = args.apikey
+    if not api_key:
+        api_key = tryReadApiKey()
+    
+    if args.wizard:
+        prompt_args(args, api_key, TESTS)
+    else:
+        openClient(api_key)
+    
+    try:
+
+        # Retrieve the filtered models exposed by the API.
+        model_ids = pullAndFilterModels()
+
+        # Build the final test list.
+        models = select_models(model_ids, args)
+        
+    except Exception as exc:
+        sys.exit(
+            f"Failed to list models: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    print(f"\nSelected {len(models)} models for testing:")
+    if not models:
+        print("\tError: No matching models found!")
+        exit(1)
+    
+    for model in models:
+        print(f"\t- {model}")
+        
+    
+    if not promptYesNo("Accept model list?", args.force):
+        return
+
+    total_tests = len(models) * len(TESTS)
+
+    print(f"\nModels: {len(models)}")
+    print(f"Tests per model: {len(TESTS)}")
+    print(f"Total test requests: {total_tests}\n")
+    
+    # prev_summary = open_old_summary() or {}
+    prev_results = open_old_results() or {}
+    tests: set = args.tests
+    
+
+    results = {}
+
+    for index, model in enumerate(models, start=1):
+        print(f"\n[{index}/{len(models)}] {model}")
+        
+        # old_summary = prev_summary.get(model, {})
+        model_obj = prev_results.get(model, {})
+        results[model] = model_obj
+
+        def run_tests():
+            for test in TESTS:
+                test_name = test["name"]
+                
+                if not test_name:
+                    raise ValueError(f"Test detected without a name: {test}")
+                
+                skip_test = tests and test_name not in tests
+
+                # Skip tests that already have a saved result.
+                if test_name in model_obj:
+                    if not skip_test:
+                        test_obj = model_obj[test_name]
+                        print(f"  [Previous Result] {test_name}: {test_obj["output_log"]}\n", end="", flush=True)
+                    continue
+                
+                if skip_test:
+                    continue                    
+                
+                result = run_test(model, test)
+                model_obj[test_name] = result
+
+                # Persist results after every request.
+                save_results(results)
+
+                time.sleep(REQUEST_DELAY_SECONDS)
+                
+        run_tests()
+
+
+    print("\n" + "=" * 72)
+    print("FINAL SUMMARY")
+    print("=" * 72)
+
+    for model in models:
+        model_results = results.get(model, {})
+
+        print(f"\n{model}")
+
+        for test_name, result in model_results.items():
+            if result["request_status"] != "success":
+                status = "ERROR"
+            elif test_name.startswith("tool_calls"):
+                status = (
+                    "TOOL CALL"
+                    if result["tool_calls_returned"]
+                    else "NO TOOL CALL"
+                )
+            else:
+                status = "ACCEPTED"
+
+            print(f"  {test_name:<32} {status}")
+
+
+    print("\nFinished.")
+    print(f"Detailed CSV: {os.path.abspath(RESULTS_CSV)}")
+    print(f"Detailed JSON: {os.path.abspath(RESULTS_JSON)}")
+    print(f"Summary CSV: {os.path.abspath(SUMMARY_CSV)}")
+
+if __name__ == "__main__":
+    main()
