@@ -700,7 +700,7 @@ def run_test(model, test, args, result=None):
     return result
 
 def is_flex_failure(test_result):
-    return test_result["request_payload"]["service_tier"] == 'flex' and test_result["http_status"] in (408, 429)
+    return test_result["request_payload"]["service_tier"] == 'flex' and test_result.get("error_code", None) == "flex_unavailable" #and test_result["http_status"] in (408, 429)
 
 def is_result_valid(test_result):
     validity = test_result.get("result_validity", None)
