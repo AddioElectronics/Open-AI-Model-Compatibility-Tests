@@ -869,8 +869,7 @@ def save_summary(results):
         row = {"model": model}
 
         for test_name, result in tests.items():
-            
-            if result["result_validity"] != ResultValidity.VALID:
+            if result.get("result_validity", get_result_validity(result.get("error_type", None))) != ResultValidity.VALID:
                 status = f"TEST_{result["result_validity"].upper()}"
             
             elif result["request_status"] != "success":
