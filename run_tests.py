@@ -982,7 +982,7 @@ def main():
         exit(1)
     
     for model in models:
-        print(f"\t- {model}")
+        print(f"  - {model}")
         
     
     if not promptYesNo("Accept model list?", args.force):
@@ -997,8 +997,10 @@ def main():
     # prev_summary = open_old_summary() or {}
     prev_results = open_old_results() or {}
     tests: set = args.tests
+    is_flex = args.service_tier == 'flex'
+    max_timeouts = args.max_timeouts
+    timeouts = 0 # Consecutive tests with flex timeouts (Does not include retries)
     
-
     results = {}
 
     for index, model in enumerate(models, start=1):
@@ -1009,6 +1011,8 @@ def main():
         results[model] = model_obj
 
         def run_tests():
+            nonlocal is_flex, timeouts
+            
             for test in TESTS:
                 test_name = test["name"]
                 
@@ -1016,9 +1020,10 @@ def main():
                     raise ValueError(f"Test detected without a name: {test}")
                 
                 skip_test = tests and test_name not in tests
-
-                # Skip tests that already have a saved result.
-                if test_name in model_obj:
+                prev_result = model_obj.get(test_name, None)
+                
+                # Skip tests that already have a saved valid result.
+                if prev_result and is_result_valid(prev_result):
                     if not skip_test:
                         test_obj = model_obj[test_name]
                         print(f"  [Previous Result] {test_name}: {test_obj["output_log"]}\n", end="", flush=True)
@@ -1027,13 +1032,65 @@ def main():
                 if skip_test:
                     continue                    
                 
+                # Run test on 
                 result = run_test(model, test, args)
+                
+                # Handle flex timeouts
+                if is_flex and is_flex_failure(result):
+                    timeouts += 1
+                    
+                    def retry():
+                        nonlocal result
+                        retries = 0
+                        while retries < args.max_retries:
+                            retries += 1
+                            print(f"  Flex timeout {timeouts}/{args.max_timeouts}! Retrying ... {retries}/{args.max_retries}")  
+                            result = run_test(model, test, args, result)
+                            if not is_flex_failure(result):
+                                return True
+                        return False
+
+                    # Fallbacks disabled, skip test
+                    if args.no_fallback:                        
+                        if timeouts > max_timeouts:
+                            print(f"  Flex timeout! Max sequential timeouts of {timeouts} reached, exiting...\n")
+                            exit(1)    
+                        elif not retry():
+                            print(f"  Flex timeout {timeouts}/{args.max_timeouts}! Skipping test...\n")                   
+
+                    # Fallback and retry on standard tier
+                    elif not retry():
+                        print(f"  Flex timeout {timeouts}/{args.max_timeouts}! Retrying and falling back to standard tier...\n")
+
+                        # Permanently fall back to default
+                        if timeouts > max_timeouts:
+                            print(f"  Max sequential timeouts of {timeouts} reached.\n")
+                            print(f"  Permanently falling back to 'default' service_tier.\n")
+                            
+                            args.service_tier = "default"
+                            is_flex = False
+                        
+                        # Re-run test on default tier
+                        result["request_payload"]["service_tier"] = "default"
+                        result = run_test(model, test, args, result)
+                            
+                else:
+                    timeouts = 0
+                
+                # Update fail count for previously executed tests
+                if prev_result:
+                    if is_result_valid(result):
+                        result.pop("result_fail_count", None)
+                    else:
+                        result["result_fail_count"] = result.get("result_fail_count", 0) + 1
+                        
+                
                 model_obj[test_name] = result
 
                 # Persist results after every request.
                 save_results(results)
 
-                time.sleep(REQUEST_DELAY_SECONDS)
+                time.sleep(args.delay)
                 
         run_tests()
 
