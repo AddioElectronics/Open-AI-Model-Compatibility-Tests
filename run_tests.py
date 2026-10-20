@@ -7,6 +7,7 @@ import time
 import argparse
 import atexit
 import fnmatch
+from enum import StrEnum, auto
 from datetime import datetime, timezone
 from openai import OpenAI
 
@@ -690,6 +691,70 @@ def run_test(model, test, args):
 
     return result
 
+def is_flex_failure(test_result):
+    return test_result["request_payload"]["service_tier"] == 'flex' and test_result["http_status"] in (408, 429)
+
+def is_result_valid(test_result):
+    validity = test_result.get("result_validity", None)
+    if validity is None:
+        validity = get_result_validity(test_result["error_type"])
+        test_result["result_validity"] = validity
+    return validity == ResultValidity.VALID
+
+class ResultValidity(StrEnum):
+    """
+    Describes whether a test result can be used to evaluate compatibility.
+    """
+
+    INCONCLUSIVE = auto()
+    """Test outcome is uncertain, e.g., connection failure, timeout, auth, etc.."""
+
+    VALID = auto()
+    """Test ran and produced an interpretable result, including API rejection
+    of the tested configuration."""
+
+    INVALID = auto()
+    """Test target is invalid or unavailable, e.g., model not found."""
+
+
+def get_result_validity(error_type: str | None) -> ResultValidity:
+    if error_type is None:
+        return ResultValidity.VALID
+
+    # The test could not reliably establish compatibility.
+    inconclusive_errors = {
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+        "InternalServerError",
+        "PermissionDeniedError",
+        "AuthenticationError",
+        "OAuthError",
+        "SubjectTokenProviderError",
+        "APIResponseValidationError",
+        "APIStatusError",
+        "ConflictError",
+        "ContentFilterFinishReasonError",
+        "LengthFinishReasonError",
+    }
+
+    if error_type in inconclusive_errors:
+        return ResultValidity.INCONCLUSIVE
+
+    # The target itself is invalid or unavailable.
+    if error_type == "NotFoundError":
+        return ResultValidity.INVALID
+
+    # The API evaluated the request but rejected the configuration.
+    # The error is a valid test outcome, not necessarily a compatibility success.
+    if error_type in {
+        "BadRequestError",
+        "UnprocessableEntityError",
+    }:
+        return ResultValidity.VALID
+
+    # Unknown errors require investigation.
+    return ResultValidity.INCONCLUSIVE
 
 # =========================================================
 # CSV and JSON output
