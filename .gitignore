@@ -1,5 +1,5 @@
 # Api Key
-api_key.txt
+api_key*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
