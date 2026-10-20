@@ -6,7 +6,6 @@
             "request": "launch",
             "program": "${cwd}/run_tests.py",
             "console": "integratedTerminal",
-            "args": "--log"
         },
         {
             "name": "Python Debugger: Run Test Wizard",
@@ -14,7 +13,7 @@
             "request": "launch",
             "program": "${cwd}/run_tests.py",
             "console": "integratedTerminal",
-            "args": ["--log", "--wizard"]
+            "args": ["--wizard"]
         },
         {
             "name": "Python Debugger: Test Help",
@@ -61,7 +60,10 @@
             "request": "launch",
             "program": "${cwd}/results.py",
             "console": "integratedTerminal",
-            "args": ["--view summary", "--wizard"]
+            "args": [
+                "--view", "summary",
+                "--wizard"
+            ]
         },
         {
             "name": "Python Debugger: Query All: Test View",
@@ -69,7 +71,7 @@
             "request": "launch",
             "program": "${cwd}/results.py",
             "console": "integratedTerminal",
-            "args": "--view test"
+            "args": ["--view", "test"]
         },
         {
             "name": "Python Debugger: Query Wizard: Test View",
@@ -77,7 +79,10 @@
             "request": "launch",
             "program": "${cwd}/results.py",
             "console": "integratedTerminal",
-            "args": ["--view test", "--wizard"]
+            "args": [
+                "--view", "test",
+                "--wizard"
+            ]
         },
         {
             "name": "Python Debugger: Query Help",
@@ -87,5 +92,5 @@
             "console": "integratedTerminal",
             "args": "--help"
         },
-    ],    
+    ],
 }
