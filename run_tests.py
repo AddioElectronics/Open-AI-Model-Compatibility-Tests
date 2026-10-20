@@ -500,7 +500,7 @@ def uses_max_completion_tokens(model_name):
     )
 
 
-def build_payload(model, test):
+def build_payload(model, test, args):
     """
     Constructs a minimal Chat Completions payload from a test object. 
     """
@@ -553,10 +553,12 @@ def build_payload(model, test):
         # Here we use "required" to make the test deterministic:
         # the model must call a tool if the request is accepted.
         payload["tool_choice"] = "required"
-    
+       
+    payload["service_tier"] = args.service_tier
+        
     # Add standard keys
-    special_keys = ["name", "use_tools", "reasoning_effort", "max_tokens", "model", "stream"]
-    reserved_keys = ["model", "stream"]
+    special_keys = ("name", "use_tools", "reasoning_effort", "max_tokens", "model", "stream")
+    reserved_keys = ("model", "stream", "service_tier")
     for key, value in test:
         if key in special_keys:
             if key in reserved_keys:
@@ -571,9 +573,9 @@ def build_payload(model, test):
 # API execution
 # =========================================================
 
-def run_test(model, test):
+def run_test(model, test, args):
     global CLIENT
-    payload = build_payload(model, test)
+    payload = build_payload(model, test, args)
 
     result = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -953,7 +955,7 @@ def main():
                 if skip_test:
                     continue                    
                 
-                result = run_test(model, test)
+                result = run_test(model, test, args)
                 model_obj[test_name] = result
 
                 # Persist results after every request.
