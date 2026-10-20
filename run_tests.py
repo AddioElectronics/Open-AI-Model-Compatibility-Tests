@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from openai import OpenAI
 
 from tests.tests import TESTS
+from core.input import *
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -104,56 +105,6 @@ def prompt_args(args, api_key, tests):
 
     # Retrieve available test names.
     available_tests = sorted(test["name"] for test in tests)
-
-    def prompt_selection(label, options, wildcard=False, default=None, showOptions=True):
-        
-        if showOptions:
-            print(f"\nAvailable {label}:")    
-            for option in options:
-                print(f"  - {option}")
-
-        wildcard_text = " (supports * wildcard)" if wildcard else ""
-
-        answer = input(
-            f"\nEnter {label}, separated by commas"
-            f"{wildcard_text} (Enter for all): "
-        ).strip()
-
-        if not answer:
-            return default
-
-        selected = {
-            item.strip()
-            for item in answer.split(",")
-            if item.strip()
-        }
-
-        if wildcard:
-            matched = {
-                option
-                for option in options
-                if any(
-                    fnmatch.fnmatchcase(option, pattern)
-                    for pattern in selected
-                )
-            }
-
-            invalid = {
-                pattern
-                for pattern in selected
-                if not any(
-                    fnmatch.fnmatchcase(option, pattern)
-                    for option in options
-                )
-            }
-        else:
-            matched = selected & set(options)
-            invalid = selected - set(options)
-
-        if invalid:
-            print(f"Unknown {label}: {', '.join(sorted(invalid))}")
-
-        return matched
 
     # Select models to include.
     selected_models = prompt_selection(

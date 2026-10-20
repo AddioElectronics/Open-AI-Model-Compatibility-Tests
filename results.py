@@ -5,6 +5,8 @@ import csv
 import textwrap
 import fnmatch
 
+from core.input import *
+
 RESULTS_JSON = "results/model_compatibility_results.json"
 SUMMARY_CSV = "results/model_compatibility_summary.csv"
 
@@ -95,48 +97,30 @@ def prompt_args(args):
         if isinstance(result, dict)
         for key in result
     })
-
-    def prompt_selection(label, options, wildcard=False, default=None):
-        print(f"\nAvailable {label}:")
-        for option in options:
-            print(f"  - {option}")
-
-        wildcard_text = " (supports * wildcard)" if wildcard else ""
-        answer = input(
-            f"\nEnter {label}, separated by commas"
-            f"{wildcard_text} (Enter for default): "
-        ).strip()
-
-        if not answer:
-            return default
-
-        selected = {
-            item.strip()
-            for item in answer.split(",")
-            if item.strip()
-        }
-
-        if wildcard:
-            matched = match_options(selected, options)
-            invalid = {
-                pattern for pattern in selected
-                if not any(
-                    fnmatch.fnmatchcase(option, pattern)
-                    for option in options
-                )
-            }
-        else:
-            matched = selected & set(options)
-            invalid = selected - set(options)
-
-        if invalid:
-            print(f"Unknown {label}: {', '.join(sorted(invalid))}")
-
-        return matched
-
-    args.models = prompt_selection("models", available_models, True)
-    args.tests = prompt_selection("tests", available_tests)
-    args.keys = prompt_selection("keys", available_keys, False, {"output_log"})
+    
+    args.models = prompt_selection(
+        "models",
+        available_models,
+        True
+    )
+    
+    args.tests = prompt_selection(
+        "tests",
+        available_tests
+    )
+    
+    args.view = prompt_enum(
+        "view",
+        ["details", "summary", "test"],
+        "details"
+    )
+    
+    args.keys = prompt_selection(
+        "keys",
+        available_keys,
+        False,
+        {"output_log"}
+    )
 
     return args
 
