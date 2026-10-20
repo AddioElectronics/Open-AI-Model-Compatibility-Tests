@@ -46,10 +46,10 @@ def parse_args():
     parser.add_argument(
         "-v", "--view",
         choices=("details", "summary", "test"),
-        default="details",
+        default=None,
         help=(
             "Choose the results view: "
-            "details (default), summary, or test."
+            "details*, summary, or test."
         ),
     )
     
@@ -97,30 +97,31 @@ def prompt_args(args):
         if isinstance(result, dict)
         for key in result
     })
-    
+
     args.models = prompt_selection(
         "models",
         available_models,
         True
-    )
+    ) if not args.models else args.models
     
     args.tests = prompt_selection(
         "tests",
         available_tests
-    )
+    ) if not args.tests else args.tests
     
     args.view = prompt_enum(
         "view",
         ["details", "summary", "test"],
         "details"
-    )
+    ) if not args.view else args.view
     
-    args.keys = prompt_selection(
-        "keys",
-        available_keys,
-        False,
-        {"output_log"}
-    )
+    if (not args.view or args.view == 'details') and not args.keys:
+        args.keys = prompt_selection(
+            "keys",
+            available_keys,
+            False,
+            {"output_log"}
+        )
 
     return args
 
