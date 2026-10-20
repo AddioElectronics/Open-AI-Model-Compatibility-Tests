@@ -64,6 +64,13 @@ def parse_args():
         action="store_true",
         help="Display every available result key.",
     )
+    
+    parser.add_argument(
+        "--show-invalid",
+        action="store_true",
+        default=None,
+        help="Display invalid tests in the results.",
+    )
 
     args = parser.parse_args()
 
@@ -115,13 +122,7 @@ def prompt_args(args):
         "details"
     ) if not args.view else args.view
     
-    if (not args.view or args.view == 'details') and not args.keys:
-        args.keys = prompt_selection(
-            "keys",
-            available_keys,
-            False,
-            {"output_log"}
-        )
+    args.show_invalid = prompt_bool("Show invalid tests in the results?", False ) if args.show_invalid is None else args.show_invalid
 
     return args
 
@@ -212,7 +213,7 @@ def print_field(key, value, indent="    ", width=96):
                 print(f"{indent}    {wrapped_line}")
 
 
-def view_detailed_results(models=None, tests=None, keys=None, all_keys=False):
+def view_detailed_results(args, models=None, tests=None, keys=None, all_keys=False):
     results = open_results()
 
     if not results:
@@ -268,6 +269,9 @@ def view_detailed_results(models=None, tests=None, keys=None, all_keys=False):
         for test_name, result in matching_tests:
             print(f"\n  ┌─ TEST: {test_name}")
             print("  │")
+            
+            if not args.show_invalid and result.get('result_validity') == 'invalid':
+                continue
 
             if all_keys:
                 selected_keys = list(result.keys())
@@ -299,7 +303,7 @@ def view_detailed_results(models=None, tests=None, keys=None, all_keys=False):
     print(SEPARATOR)
 
 
-def view_summary(models=None, tests=None):
+def view_summary(args, models=None, tests=None):
     results = open_summary()
 
     if not results:
@@ -324,7 +328,8 @@ def view_summary(models=None, tests=None):
         model_results = results[model]
 
         for test_name, status in sorted(model_results.items()):
-            if tests is not None and test_name not in tests:
+            if ((tests is not None and test_name not in tests) or
+                (not args.show_invalid and status == 'TEST_INVALID')):
                 continue
 
             print(f"  {test_name:<40} {status}")
@@ -332,7 +337,7 @@ def view_summary(models=None, tests=None):
     print()
     print(SEPARATOR)
 
-def view_by_test(models=None, tests=None):
+def view_by_test(args, models=None, tests=None):
     results = open_summary()
 
     if not results:
@@ -370,14 +375,16 @@ def view_by_test(models=None, tests=None):
         return
 
     # Display results grouped by test.
-    status_order = (
-        "TEST_INCONCLUSIVE",
-        "TEST_INVALID",
+    status_order = [
         "ACCEPTED",
         "ERROR",
         "TOOL_CALL",
         "NO_TOOL_CALL",
-    )
+        "TEST_INCONCLUSIVE",
+    ]
+    
+    if args.show_invalid:
+        status_order.append('TEST_INVALID')
 
     for test_name in sorted(test_results, key=str.lower):
         print()
@@ -414,11 +421,11 @@ def main():
         args.view = "details"
         
     if args.view == "test":
-        view_by_test(models=models, tests=tests)
+        view_by_test(args, models=models, tests=tests)
     elif args.view == "summary":
-        view_summary(models=models, tests=tests)
+        view_summary(args, models=models, tests=tests)
     else:
-        view_detailed_results(models=models, tests=tests)
+        view_detailed_results(args, models=models, tests=tests)
 
 
 if __name__ == "__main__":

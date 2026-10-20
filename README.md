@@ -100,14 +100,15 @@ python results.py
 
 ### Arguments
 
-| Argument         | Value                      | Description                                       |
-| -----------------| -------------------------- | ------------------------------------------------- |
-| `-m`, `--models` | MODEL [...]                | Filter by model names. Supports `*` wildcards.    |
-| `-t`, `--tests`  | TEST [...]                 | Filter by test names.                             |
-| `-k`, `--keys`   | KEY [...]                  | Select result fields to display.                  |
-| `-v`, `--view`   | details*, summary, test    | Select how the results are displayed              |
-| `-w`, `--wizard` |                            | Interactively select models, tests, and keys.     |
-| `--all-keys`     |                            | Display every available result field.             |
+| Argument         | Value                      | Description                                                       |
+| -----------------| -------------------------- | ----------------------------------------------------------------- |
+| `-m`, `--models` | MODEL [...]                | Filter by model names. Supports `*` wildcards.                    |
+| `-t`, `--tests`  | TEST [...]                 | Filter by test names.                                             |
+| `-k`, `--keys`   | KEY [...]                  | Select result fields to display.                                  |
+| `-v`, `--view`   | details*, summary, test    | Select how the results are displayed                              |
+| `-w`, `--wizard` |                            | Interactively select models, tests, and keys.                     |
+| `--all-keys`     |                            | Display every available result field.                             |
+| `--show-invalid` |                            | Display tests that they them selves are invalid, in the results.  |
 
 ### Examples
 
