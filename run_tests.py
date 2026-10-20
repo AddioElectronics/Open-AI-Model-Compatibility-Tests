@@ -152,7 +152,7 @@ def prompt_args(args, api_key, tests):
         wildcard=True,
         default=None,
         showOptions=True,
-    )
+    ) if not args.include else args.include
     
     exclude_models = prompt_selection(
         "models to exclude",
@@ -160,7 +160,7 @@ def prompt_args(args, api_key, tests):
         wildcard=True,
         default=None,
         showOptions=False,
-    )
+    ) if not args.exclude else args.exclude
 
     # Default to all models if none were explicitly selected.
     if selected_models is None:
@@ -176,12 +176,31 @@ def prompt_args(args, api_key, tests):
         "tests",
         available_tests,
         default=None,
-    )
+    ) if not args.tests else args.tests
 
     # Store selections on args.
     args.include = selected_models
     args.exclude = exclude_models
     args.tests = selected_tests
+    
+    args.delay = prompt_int(
+        "delay (ms)",
+        0,
+        1000,
+        REQUEST_DELAY_MS
+    ) if args.delay is None else args.delay
+    
+    args.service_tier = (prompt_enum(
+                            "service tiers (Default: flex)",
+                            ("default", "auto", "flex", "fast", "ultrafast"),
+                            "flex"
+                        ) if args.service_tier is None else args.service_tier)
+    
+    if args.service_tier == 'flex':
+        args.no_fallback = not prompt_bool("fallback to 'default' tier on flex timeout?", False) if args.no_fallback is None else args.no_fallback
+        args.max_retries = prompt_int("Max flex retries", 0, None, MAX_RETRIES) if args.max_retries is None else args.max_retries
+        args.max_timeouts = prompt_int("Max timeouts", 0, None, MAX_TIMEOUTS) if args.max_timeouts is None else args.max_timeouts
+        
 
     return args, api_key
 
@@ -194,10 +213,9 @@ RESULTS_CSV = f"{RESULTS_BASE}model_compatibility_results.csv"
 RESULTS_JSON = f"{RESULTS_BASE}model_compatibility_results.json"
 SUMMARY_CSV = f"{RESULTS_BASE}model_compatibility_summary.csv"
 
-REQUEST_DELAY_SECONDS = 0.25
-
-# Include dated snapshots as well as model aliases.
-INCLUDE_SNAPSHOTS = True
+REQUEST_DELAY_MS = 250      # Default
+MAX_TIMEOUTS     = 10       # Maximum sequential timeouts before permanent fallback to "default" or app exit
+MAX_RETRIES      = 0        # Maximum amount of retries using the 'flex' tier before falling back to 'defualt or skipping
 
 # OpenAi client
 CLIENT = None
