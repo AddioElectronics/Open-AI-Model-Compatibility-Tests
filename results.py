@@ -39,7 +39,7 @@ def parse_args():
         "-k", "--keys",
         metavar="KEY",
         nargs="+",
-        default=DEFAULT_KEYS,
+        default=None,
         help="JSON result keys to display. output_log is always included.",
     )
 
@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument(
         "--all-keys",
         action="store_true",
+        default=None,
         help="Display every available result key.",
     )
     
@@ -80,7 +81,8 @@ def parse_args():
     if args.tests:
         args.tests = {item.strip() for item in args.tests if item.strip()}
 
-    args.keys = {item.strip() for item in args.keys if item.strip()}
+    if args.keys:
+        args.keys = {item.strip() for item in args.keys if item.strip()}
 
     return args
 
@@ -225,7 +227,7 @@ def print_field(key, value, indent="    ", width=96):
                 print(f"{indent}    {wrapped_line}")
 
 
-def view_detailed_results(args, models=None, tests=None, keys=None, all_keys=False):
+def view_detailed_results(args, models=None, tests=None, keys=None):
     results = open_results()
 
     if not results:
@@ -285,7 +287,7 @@ def view_detailed_results(args, models=None, tests=None, keys=None, all_keys=Fal
             if not args.show_invalid and result.get('result_validity') == 'invalid':
                 continue
 
-            if all_keys:
+            if args.all_keys:
                 selected_keys = list(result.keys())
             else:
                 selected_keys = sorted(keys or DEFAULT_KEYS)
@@ -429,8 +431,8 @@ def main():
     models = args.models
     tests = args.tests
     
-    if not args.view:
-        args.view = "details"
+    if not args.view:        args.view = "details"
+    if not args.keys:        args.keys = DEFAULT_KEYS
         
     if args.view == "test":
         view_by_test(args, models=models, tests=tests)
