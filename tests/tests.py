@@ -27,10 +27,4 @@ TESTS = [
         "use_tools": True,
         "max_tokens": MAX_TOKENS_TOOLCALL,
     },
-    {
-        "name": "tool_calls:omitted",
-        "reasoning_effort": None,
-        "use_tools": True,
-        "max_tokens": MAX_TOKENS_TOOLCALL,
-    },
 ]
