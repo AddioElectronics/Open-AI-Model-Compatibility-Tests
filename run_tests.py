@@ -854,7 +854,11 @@ def save_summary(results):
         row = {"model": model}
 
         for test_name, result in tests.items():
-            if result["request_status"] != "success":
+            
+            if result["result_validity"] != ResultValidity.VALID:
+                status = f"TEST_{result["result_validity"].upper()}"
+            
+            elif result["request_status"] != "success":
                 status = "ERROR"
 
             elif test_name.startswith("tool_calls"):
@@ -1105,7 +1109,9 @@ def main():
         print(f"\n{model}")
 
         for test_name, result in model_results.items():
-            if result["request_status"] != "success":
+            if result["result_validity"] != ResultValidity.VALID:
+                status = f"TEST_{result["result_validity"].upper()}"
+            elif result["request_status"] != "success":
                 status = "ERROR"
             elif test_name.startswith("tool_calls"):
                 status = (
