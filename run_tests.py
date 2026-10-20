@@ -1041,7 +1041,7 @@ def main():
                 prev_result = model_obj.get(test_name, None)
                 
                 # Skip tests that already have a saved valid result.
-                if prev_result and is_result_valid(prev_result):
+                if prev_result and not is_result_inconclusive(prev_result):
                     if not skip_test:
                         test_obj = model_obj[test_name]
                         print(f"  [Previous Result] {test_name}: {test_obj["output_log"]}\n", end="", flush=True)
