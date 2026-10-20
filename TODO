@@ -21,8 +21,8 @@ Test Modules:
       }
 
 Querying:
-  ☐ An actual query system
-    e.g., Search for models that support tool calling with reasoning none
+  ☐ Actual query command system
+    ☐ Intersection/Difference of 2 tests (in test view), and a specific status
   ☐ Include model start/end date in search
   ☐ Price per 1M included in search results?
   ☐ Copy filtered results to new file
