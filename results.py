@@ -122,6 +122,18 @@ def prompt_args(args):
         "details"
     ) if not args.view else args.view
     
+    if (not args.view or args.view == 'details'):
+        
+        args.all_keys = prompt_bool("Display all keys?", False ) if args.all_keys is None else args.all_keys
+        
+        if not args.all_keys:
+            args.keys = prompt_selection(
+                "keys",
+                available_keys,
+                False,
+                {"output_log"}
+            ) if not args.keys else args.keys
+        
     args.show_invalid = prompt_bool("Show invalid tests in the results?", False ) if args.show_invalid is None else args.show_invalid
 
     return args
