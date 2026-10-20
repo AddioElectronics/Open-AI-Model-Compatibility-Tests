@@ -43,18 +43,22 @@ python run_tests.py
 
 ### Arguments
 
-| Argument               | Value        | Description                                                  |
-| -----------------------| ------------ | ------------------------------------------------------------ |
-| `-a`, `--apikey`       |              | Your Open AI API key, or leave blank to use api_key.txt.     |
-| `-i`, `--include`      | MODEL [...]  | Explicitly include model names. (Supports * Wildcard)        |
-| `-ex`, `--exclude`     | MODEL [...]  | Explicitly exclude model names. (Supports * Wildcard)        |
-| `-r`, `--regex`        | REGEX        | Include API-listed models matching a regex.                  |
-| `-rx`, `--regexclude`  | REGEX        | Exclude models matching a regex.                             |
-| `-t`, `--tests`        | TEST [...]   | Select specific tests. Defaults to all tests.                |
-| `-f`, `--force`        |              | Skip the confirmation prompt.                                |
-| `-l`, `--log`          |              | Log standard output to a file.                               |
-| `-w`, `--wizard`       |              | Interactively select models, tests, and keys.                |
-
+| Argument                   | Value       | Description                                                                                      |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| `-a`, `--apikey`           |             | Your OpenAI API key, or leave blank to use `api_key.txt`.                                        |
+| `-i`, `--include`          | MODEL [...] | Explicitly include model names. (Supports * Wildcard)                                            |
+| `-ex`, `--exclude`         | MODEL [...] | Explicitly exclude model names. (Supports * Wildcard)                                            |
+| `-r`, `--regex`            | REGEX       | Include API-listed models matching a regex.                                                      |
+| `-rx`, `--regexclude`      | REGEX       | Exclude models matching a regex.                                                                 |
+| `-t`, `--tests`            | TEST [...]  | Select specific tests. Defaults to all tests.                                                    |
+| `-w`, `--wizard`           |             | Interactively select models, tests, and keys.                                                    |
+| `-f`, `--force`            |             | Skip the confirmation prompt.                                                                    |
+| `-l`, `--log`              |             | Log standard output to a file.                                                                   |
+| `-d`, `--delay`            | MS          | Delay between requests in milliseconds. If non 0, service tier is limited to `default` and `flex`. Max: 1,000 ms, Default: 250|
+| `-s`, `--service-tier`     | TIER        | Choose a service tier: `default`, `auto`, `*flex`, `fast`, or `ultrafast`. If `--delay` is greater than 0, `fast` and `ultrafast` fall back to `default`.|
+| `--max-retries`            | COUNT       | Max number of test retries using the `flex` tier before falling back to `default` or skipping. Default: 0|
+| `--max-timeouts`           | COUNT       | Max number of consecutive `flex` tier timeouts before falling back to `default` or stopping execution. Default: 10|
+| `--no-fallback`            |             | Disable fallback to `default` service tier if `flex` fails.                          |
 
 ### Examples
 

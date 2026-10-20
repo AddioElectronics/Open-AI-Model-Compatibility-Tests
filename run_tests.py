@@ -80,6 +80,45 @@ def parse_args():
         action="store_true",
         help="Log stdout to file.",
     )
+    
+    parser.add_argument(
+        "-d", "--delay",
+        default=None,
+        type=int,
+        help="Set the delay in milliseconds between requests. If greater than 0, service tier is limited to 'default' and 'flex'.\n"
+            f"Default: {REQUEST_DELAY_MS}, Maximum: 1,000",
+    )    
+    
+    parser.add_argument(
+        "-s", "--service-tier",
+        choices=("default", "auto", "flex", "fast", "ultrafast"),
+        default=None,
+        help="Choose a service tier to use. If --delay is greater than 0, 'fast' and 'ultrafast' will fall back to 'default'.\n"
+             "Default: flex",
+    )
+
+    parser.add_argument(
+        "--max-retries",
+        default=None,
+        type=int,
+        help="Maximum amount of test retries using the 'flex' tier before falling back to 'defualt or skipping.\n"
+            f"Default: {MAX_RETRIES}",
+    )
+    
+    parser.add_argument(
+        "--max-timeouts",
+        default=None,
+        type=int,
+        help="Maximum amount of sequential 'flex' tier timeouts before falling back to 'default' or stopping execution.\n"
+            f"Default: {MAX_TIMEOUTS}",
+    )
+    
+    parser.add_argument(
+        "--no-fallback",
+        action="store_false",
+        default=None,
+        help="Disable fallback to 'default' service tier if Flex fails.",
+    )
 
     args = parser.parse_args()
     
