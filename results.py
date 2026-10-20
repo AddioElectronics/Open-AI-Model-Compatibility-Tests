@@ -371,6 +371,8 @@ def view_by_test(models=None, tests=None):
 
     # Display results grouped by test.
     status_order = (
+        "TEST_INCONCLUSIVE",
+        "TEST_INVALID",
         "ACCEPTED",
         "ERROR",
         "TOOL_CALL",
@@ -407,6 +409,9 @@ def main():
         
     models = args.models
     tests = args.tests
+    
+    if not args.view:
+        args.view = "details"
         
     if args.view == "test":
         view_by_test(models=models, tests=tests)
