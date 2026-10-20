@@ -49,9 +49,11 @@ def prompt_selection(label, options, wildcard=False, default=None, showOptions=T
             }
             
         elif len(selected) == 1:
-            if selected not in options:
-                print(f"Unknown {label}: {selected}")
+            test_name = next(iter(selected))
+            if test_name not in options:
+                print(f"Unknown {label}: {test_name}")
                 continue
+            return selected
             
         else:
             matched = selected & set(options)
