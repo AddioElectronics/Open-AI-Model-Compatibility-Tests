@@ -1,4 +1,4 @@
-# OpenAI Model Compatibility Tester `V0.1.0`
+# OpenAI Model Compatibility Tester `V0.1.1`
 
 A Python CLI tool for testing API model compatibility, recording results, and querying previous test runs.
 
