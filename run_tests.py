@@ -1013,19 +1013,17 @@ def main():
     print(f"Total test requests: {total_tests}\n")
     
     # prev_summary = open_old_summary() or {}
-    prev_results = open_old_results() or {}
+    results = open_old_results() or {}
     tests: set = args.tests
     is_flex = args.service_tier == 'flex'
     max_timeouts = args.max_timeouts
     timeouts = 0 # Consecutive tests with flex timeouts (Does not include retries)
-    
-    results = {}
 
     for index, model in enumerate(models, start=1):
         print(f"\n[{index}/{len(models)}] {model}")
         
         # old_summary = prev_summary.get(model, {})
-        model_obj = prev_results.get(model, {})
+        model_obj = results.get(model, {})
         results[model] = model_obj
 
         def run_tests():
