@@ -574,9 +574,9 @@ def build_payload(model, test, args):
 # API execution
 # =========================================================
 
-def run_test(model, test, args):
+def run_test(model, test, args, result=None):
     global CLIENT
-    payload = build_payload(model, test, args)
+    payload = build_payload(model, test, args) if not result else result["request_payload"]
 
     result = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -608,8 +608,8 @@ def run_test(model, test, args):
         "error_type": None,
         "error_code": None,
         "error_message": None,
-        "output_log": None
-    }
+        "output_log": None,
+    } if not result else result
 
     print(f"  {test['name']}: ", end="", flush=True)
     
@@ -668,10 +668,11 @@ def run_test(model, test, args):
             )
 
     except Exception as exc:
+        validity = get_result_validity(type(exc).__name__)
         result["request_status"] = "error"
         result["error_type"] = type(exc).__name__
-        result["error_message"] = str(exc)
-
+        result["result_validity"] = validity
+        result["error_message"] = str(exc)        
         result["http_status"] = getattr(exc, "status_code", None)
         result["error_code"] = getattr(exc, "code", None)
 
@@ -679,10 +680,16 @@ def run_test(model, test, args):
         if body is not None:
             result["error_body"] = body
 
-        write_log(
-            f"ERROR — {type(exc).__name__}: "
-            f"{str(exc)[:250]}"
-        )
+        if validity == ResultValidity.VALID:
+            write_log(
+                f"ERROR — {type(exc).__name__}: "
+                f"{str(exc)[:250]}"
+            )
+        else:
+            write_log(
+                f"TEST_{validity.upper()} — {type(exc).__name__}: "
+                f"{str(exc)[:250]}"
+            )
 
     finally:
         result["latency_seconds"] = round(
