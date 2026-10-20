@@ -708,6 +708,20 @@ def is_result_valid(test_result):
         test_result["result_validity"] = validity
     return validity == ResultValidity.VALID
 
+def is_result_invalid(test_result):
+    validity = test_result.get("result_validity", None)
+    if validity is None:
+        validity = get_result_validity(test_result["error_type"])
+        test_result["result_validity"] = validity
+    return validity == ResultValidity.INVALID
+
+def is_result_inconclusive(test_result):
+    validity = test_result.get("result_validity", None)
+    if validity is None:
+        validity = get_result_validity(test_result["error_type"])
+        test_result["result_validity"] = validity
+    return validity == ResultValidity.INCONCLUSIVE
+
 class ResultValidity(StrEnum):
     """
     Describes whether a test result can be used to evaluate compatibility.
