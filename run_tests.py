@@ -162,10 +162,11 @@ def prompt_args(args, api_key, tests):
         default=None,
         showOptions=False,
     ) if not args.exclude else args.exclude
+    
 
     # Default to all models if none were explicitly selected.
     if selected_models is None:
-        selected_models = set(available_models)
+        selected_models = set(DEFAULT_MODELS)
     else:
         selected_models = set(selected_models)
 
