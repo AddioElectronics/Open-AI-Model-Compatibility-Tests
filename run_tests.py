@@ -205,6 +205,40 @@ def prompt_args(args, api_key, tests):
     return args, api_key
 
 
+def sanitize_args(args):
+    """
+    Ensure basic argument values are within range, and resolve defaults when None.
+    
+    Arguments that rely on API data such as --includes are not handled.
+    """    
+    if args.delay:
+        if args.delay < 0:
+            raise ValueError("--delay cannot be negative")
+        elif args.delay > 1000:
+            args.delay = 1.0
+        else:
+            args.delay = args.delay / 1000.0
+    else:
+        args.delay = REQUEST_DELAY_MS / 1000.0
+        
+    if args.service_tier is None:
+        args.service_tier = "flex"
+    elif args.delay > 0 and args.service_tier in ('fast', 'ultrafast'):
+        args.service_tier = 'default'
+        
+    if args.max_retries is None:
+        args.max_retries = MAX_RETRIES
+    elif args.max_retries < 0:
+        raise ValueError("--max--retries cannot be negative")
+        
+    if args.max_timeouts is None:
+        args.max_timeouts = MAX_TIMEOUTS
+    elif args.max_timeouts < 0:
+        raise ValueError("--max--timeouts cannot be negative")
+        
+    if args.no_fallback is None:
+        args.no_fallback = False
+        
 # =========================================================
 # Configuration
 # =========================================================
@@ -851,6 +885,8 @@ def main():
         prompt_args(args, api_key, TESTS)
     else:
         openClient(api_key)
+        
+    sanitize_args(args)
     
     try:
 
