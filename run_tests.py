@@ -559,7 +559,7 @@ def build_payload(model, test, args):
     # Add standard keys
     special_keys = ("name", "use_tools", "reasoning_effort", "max_tokens", "model", "stream")
     reserved_keys = ("model", "stream", "service_tier")
-    for key, value in test:
+    for key, value in test.items():
         if key in special_keys:
             if key in reserved_keys:
                 print(f"Reserved test key will be skipped ({key}: {value})")
